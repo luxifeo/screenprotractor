@@ -24,9 +24,9 @@ class Canvas(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setMouseTracking(True)
-        self.pointO = QPointF(100, 100)
-        self.pointA = QPointF(200, 100)
-        self.pointB = QPointF(100, 200)
+        self.pointO = QPointF(200, 200)
+        self.pointA = QPointF(100, 100)
+        self.pointB = QPointF(300, 300)
         self.points = [self.pointO, self.pointA, self.pointB]
         canvas = QPixmap(self.size())
         canvas.fill(QColor(255, 255, 255, 255))
@@ -86,7 +86,7 @@ class Canvas(QLabel):
         return super().mouseReleaseEvent(ev)
 
     def paintEvent(self, a0: QPaintEvent) -> None:
-        self.pixmap().fill(QColor(255, 255, 255, 20))
+        self.pixmap().fill(QColor(255, 255, 255, 100))
         painter = QPainter(self.pixmap())
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.drawLine(self.pointO, self.pointA)
@@ -131,31 +131,50 @@ class Canvas(QLabel):
 
         startAngle = int(startAngle * factor)
         angle = int(angle * factor)
-        
         # print(angleAOx, angleBOx)
         ### To draw arc, we need AOx and BOx angle
         ### arc is drawn clockwise
         painter.drawArc(int(self.pointO.x() - width // 2), int(self.pointO.y() - height // 2), width, height, startAngle, angle)
         
-        # O is green
-        pen = QPen(Qt.green)
-        pen.setWidth(10)
-        painter.setPen(pen)
-        painter.drawPoint(self.pointO)
-        # A is red
-        pen = QPen(Qt.red)
-        pen.setWidth(10)
-        painter.setPen(pen)
-        painter.drawPoint(self.pointA)
-        # B is blue
-        pen = QPen(Qt.blue)
-        pen.setWidth(10)
-        painter.setPen(pen)
-        painter.drawPoint(self.pointB)
+        penWidth = 5
+        circleX = circleY = 3
 
+        greenPen = QPen(Qt.green, penWidth)
+        redPen = QPen(Qt.red, penWidth)
+        bluePen = QPen(Qt.blue, penWidth)
+
+        greenBrush = QBrush(Qt.green, Qt.SolidPattern)
+        redBrush = QBrush(Qt.red, Qt.SolidPattern)
+        blueBrush = QBrush(Qt.blue, Qt.SolidPattern)
+
+        # O is green
+        painter.setPen(greenPen)
+        painter.setBrush(greenBrush)
+        painter.drawEllipse(self.pointO, circleX, circleY)
+        # A is red
+        painter.setPen(redPen)
+        painter.setBrush(redBrush)
+        painter.drawEllipse(self.pointA, circleX, circleY)
+        # B is blue
+        painter.setPen(bluePen)
+        painter.setBrush(blueBrush)
+        painter.drawEllipse(self.pointB, circleX, circleY)
+        
         pen = QPen(Qt.black)
         painter.setPen(pen)
-        painter.drawText(self.pointO, f'{angle / factor:.1f}')
+
+        text = f'Angle: {angle / factor:.1f}° - {angle / factor / 180 * math.pi:.4f} rad'
+        textRect = painter.boundingRect(0, 0, 150, 30, 0, text)
+        textW = textRect.width()
+        textH = textRect.height()
+        padding = 15
+        painter.fillRect(0, 0, padding * 2 + textW, padding * 2 + textH, QColor(255, 255, 255, 255))
+        painter.drawText(padding, padding + textH, text)
+        painter.drawText(int(self.pointO.x() + penWidth), int(self.pointO.y() - penWidth), f'O ({self.pointO.x():.0f}, {self.pointO.y():.0f})')
+        painter.drawText(int(self.pointA.x() + penWidth), int(self.pointA.y() - penWidth), f'A ({self.pointA.x():.0f}, {self.pointA.y():.0f})')
+        painter.drawText(int(self.pointB.x() + penWidth), int(self.pointB.y() - penWidth), f'B ({self.pointB.x():.0f}, {self.pointB.y():.0f})')
+
+
 
         painter.end()
         return super().paintEvent(a0)
