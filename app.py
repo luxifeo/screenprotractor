@@ -24,12 +24,14 @@ class Canvas(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setMouseTracking(True)
+
+        ### Point position are relative to window screen
+
         self.pointO = QPointF(200, 200)
         self.pointA = QPointF(100, 100)
         self.pointB = QPointF(300, 300)
         self.points = [self.pointO, self.pointA, self.pointB]
         canvas = QPixmap(self.size())
-        canvas.fill(QColor(255, 255, 255, 255))
         self.setPixmap(canvas)
 
         self.closestPoint = None
@@ -37,6 +39,43 @@ class Canvas(QLabel):
 
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        screenX, screenY, screenW, screenH = self.getScreenGeometry()
+        # logger.info(f'{screenX} {screenY} {screenW} {screenH}')
+        self.setGeometry(screenX, screenY, screenW, screenH)
+
+    def getScreenGeometry(self):
+        maxX = maxY = -1
+        screenSize = QDesktopWidget().screenGeometry()
+        minX = screenSize.width()
+        minY = screenSize.height()
+
+        for point in self.points:
+            pointX = point.x()
+            pointY = point.y()
+            if pointX > maxX:
+                maxX = pointX
+            if pointY > maxY:
+                maxY = pointY
+            if pointX < minX:
+                minX = pointX
+            if pointY < minY:
+                minY = pointY
+
+        padding = 60
+
+        minX = max(0, minX - padding)
+        minY = max(0, minY - padding)
+        maxX = min(screenSize.width() - 1, maxX + padding)
+        maxY = min(screenSize.height() - 1, maxY + padding)
+
+        logger.debug(f'{minX} {minY} {maxX} {maxY}')
+
+        screenX = int(minX)
+        screenY = int(minY)
+        screenW = int(maxX - minX)
+        screenH = int(maxY - minY)
+
+        return screenX, screenY, screenW, screenH
 
     def mouseMoveEvent(self, ev: QMouseEvent) -> None:
         # print(ev.x(), ev.y())
@@ -48,20 +87,30 @@ class Canvas(QLabel):
 
             minDist = math.inf
             for point in self.points:
-                dist = math.sqrt((point.x() - x) ** 2 + (point.y() - y) ** 2)
+                pointX = point.x() - self.x()
+                pointY = point.y() - self.y()
+                dist = math.sqrt((pointX - x) ** 2 + (pointY - y) ** 2)
                 if dist < minDist:
                     minDist = dist
                     self.closestPoint = point
             if minDist < 10:
-                # print('Mouse is close to point', self.closestPoint)
-                pass
+                self.setCursor(Qt.PointingHandCursor)
             else:
                 self.closestPoint = None
+                self.setCursor(Qt.ArrowCursor)
 
         else:
-            self.closestPoint.setX(x)
-            self.closestPoint.setY(y)
-            self.repaint()
+            ### If point is near window border, expand it
+            self.closestPoint.setX(x + self.x())
+            self.closestPoint.setY(y + self.y())
+
+            screenX, screenY, screenW, screenH = self.getScreenGeometry()
+            logger.info(f'{screenX} {screenY} {screenW} {screenH} {self.x()}')
+            newRect = QRect(screenX, screenY, screenW, screenH)
+            if newRect == self.geometry():
+                self.repaint()
+            else:
+                self.setGeometry(newRect)
 
         return super().mouseMoveEvent(ev)
 
@@ -85,12 +134,23 @@ class Canvas(QLabel):
             self.isMoving = False
         return super().mouseReleaseEvent(ev)
 
+    def resizeEvent(self, a0: QResizeEvent) -> None:
+        self.setPixmap(QPixmap(self.size()))
+        return super().resizeEvent(a0)
+
     def paintEvent(self, a0: QPaintEvent) -> None:
         self.pixmap().fill(QColor(255, 255, 255, 100))
         painter = QPainter(self.pixmap())
         painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.drawLine(self.pointO, self.pointA)
-        painter.drawLine(self.pointO, self.pointB)
+
+        screenX = self.x()
+        screenY = self.y()
+        relativePointO = QPointF(self.pointO.x() - screenX, self.pointO.y() - screenY)
+        relativePointA = QPointF(self.pointA.x() - screenX, self.pointA.y() - screenY)
+        relativePointB = QPointF(self.pointB.x() - screenX, self.pointB.y() - screenY)
+
+        painter.drawLine(relativePointO, relativePointA)
+        painter.drawLine(relativePointO, relativePointB)
         
         width = height = 40
         factor = 16
@@ -127,14 +187,14 @@ class Canvas(QLabel):
             angle = 360 - angleAOB
 
 
-        logger.info(f'{angleAOx}, {angleBOx}, {angleAOB}, {startAngle}, {angle}')
+        # logger.info(f'{angleAOx}, {angleBOx}, {angleAOB}, {startAngle}, {angle}')
 
         startAngle = int(startAngle * factor)
         angle = int(angle * factor)
         # print(angleAOx, angleBOx)
         ### To draw arc, we need AOx and BOx angle
         ### arc is drawn clockwise
-        painter.drawArc(int(self.pointO.x() - width // 2), int(self.pointO.y() - height // 2), width, height, startAngle, angle)
+        painter.drawArc(int(relativePointO.x() - width // 2), int(relativePointO.y() - height // 2), width, height, startAngle, angle)
         
         penWidth = 5
         circleX = circleY = 3
@@ -150,15 +210,15 @@ class Canvas(QLabel):
         # O is green
         painter.setPen(greenPen)
         painter.setBrush(greenBrush)
-        painter.drawEllipse(self.pointO, circleX, circleY)
+        painter.drawEllipse(relativePointO, circleX, circleY)
         # A is red
         painter.setPen(redPen)
         painter.setBrush(redBrush)
-        painter.drawEllipse(self.pointA, circleX, circleY)
+        painter.drawEllipse(relativePointA, circleX, circleY)
         # B is blue
         painter.setPen(bluePen)
         painter.setBrush(blueBrush)
-        painter.drawEllipse(self.pointB, circleX, circleY)
+        painter.drawEllipse(relativePointB, circleX, circleY)
         
         pen = QPen(Qt.black)
         painter.setPen(pen)
@@ -170,11 +230,9 @@ class Canvas(QLabel):
         padding = 15
         painter.fillRect(0, 0, padding * 2 + textW, padding * 2 + textH, QColor(255, 255, 255, 255))
         painter.drawText(padding, padding + textH, text)
-        painter.drawText(int(self.pointO.x() + penWidth), int(self.pointO.y() - penWidth), f'O ({self.pointO.x():.0f}, {self.pointO.y():.0f})')
-        painter.drawText(int(self.pointA.x() + penWidth), int(self.pointA.y() - penWidth), f'A ({self.pointA.x():.0f}, {self.pointA.y():.0f})')
-        painter.drawText(int(self.pointB.x() + penWidth), int(self.pointB.y() - penWidth), f'B ({self.pointB.x():.0f}, {self.pointB.y():.0f})')
-
-
+        painter.drawText(int(relativePointO.x() + penWidth), int(relativePointO.y() - penWidth), f'O ({self.pointO.x():.0f}, {self.pointO.y():.0f})')
+        painter.drawText(int(relativePointA.x() + penWidth), int(relativePointA.y() - penWidth), f'A ({self.pointA.x():.0f}, {self.pointA.y():.0f})')
+        painter.drawText(int(relativePointB.x() + penWidth), int(relativePointB.y() - penWidth), f'B ({self.pointB.x():.0f}, {self.pointB.y():.0f})')
 
         painter.end()
         return super().paintEvent(a0)
@@ -186,6 +244,9 @@ class Canvas(QLabel):
         return super().keyPressEvent(ev)
 
 if __name__ == '__main__':
+    if not os.environ.get('DEBUG'):
+        logger.remove(0)
+        logger.add(sys.stderr, level="CRITICAL")
     app = QApplication(sys.argv)
     window = Canvas()
     window.setWindowIcon(QIcon('icon.png'))
