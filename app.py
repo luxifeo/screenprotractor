@@ -24,7 +24,6 @@ class Canvas(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setMouseTracking(True)
-
         ### Point position are relative to window screen
 
         self.pointO = QPointF(200, 200)
@@ -35,7 +34,9 @@ class Canvas(QLabel):
         self.setPixmap(canvas)
 
         self.closestPoint = None
-        self.isMoving = False
+        self.isMovingPoint = False
+        self.isMovingWindow = False
+        self.movingWindowAnchorPoint = QPoint()
 
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -83,8 +84,7 @@ class Canvas(QLabel):
         y = ev.y()
 
         
-        if not self.isMoving:
-
+        if not self.isMovingPoint and not self.isMovingWindow:
             minDist = math.inf
             for point in self.points:
                 pointX = point.x() - self.x()
@@ -99,7 +99,7 @@ class Canvas(QLabel):
                 self.closestPoint = None
                 self.setCursor(Qt.ArrowCursor)
 
-        else:
+        elif self.isMovingPoint:
             ### If point is near window border, expand it
             self.closestPoint.setX(x + self.x())
             self.closestPoint.setY(y + self.y())
@@ -111,12 +111,43 @@ class Canvas(QLabel):
                 self.repaint()
             else:
                 self.setGeometry(newRect)
+        elif self.isMovingWindow:
+            currentPos = ev.globalPos()
+
+            appWindow = self.window()
+
+            screenSize = QDesktopWidget().screenGeometry()
+            screenW = screenSize.width()
+            screenH = screenSize.height()
+
+            windowW = appWindow.width()
+            windowH = appWindow.height()
+
+            currentWindowX = appWindow.x()
+            currentWindowY = appWindow.y()
+
+            offsetX = min(max(0 - currentWindowX, currentPos.x() - self.movingWindowAnchorPoint.x()), screenW - windowW - currentWindowX)
+            offsetY = min(max(0 - currentWindowY, currentPos.y() - self.movingWindowAnchorPoint.y()), screenH - windowH - currentWindowY)
+
+
+            for point in self.points:
+                point.setX(point.x() + offsetX)
+                point.setY(point.y() + offsetY)
+            self.movingWindowAnchorPoint = currentPos
+            appWindow.move(offsetX + currentWindowX, offsetY + currentWindowY)
+            self.repaint()
 
         return super().mouseMoveEvent(ev)
 
     def mousePressEvent(self, ev: QMouseEvent) -> None:
-        if self.closestPoint is not None and ev.button() == Qt.LeftButton:
-            self.isMoving = True
+        if ev.button() == Qt.LeftButton:
+            if self.closestPoint is not None:
+                self.isMovingPoint = True
+            else:
+                self.isMovingWindow = True
+                self.setCursor(Qt.PointingHandCursor)
+                self.movingWindowAnchorPoint = ev.globalPos()
+                logger.debug(f'Anchor Pos {self.movingWindowAnchorPoint}')
         return super().mousePressEvent(ev)
 
     def contextMenuEvent(self, ev: QContextMenuEvent) -> None:
@@ -130,8 +161,9 @@ class Canvas(QLabel):
         return super().contextMenuEvent(ev)
 
     def mouseReleaseEvent(self, ev: QMouseEvent) -> None:
-        if self.isMoving:
-            self.isMoving = False
+        self.isMovingPoint = False
+        self.isMovingWindow = False
+        self.setCursor(Qt.ArrowCursor)
         return super().mouseReleaseEvent(ev)
 
     def resizeEvent(self, a0: QResizeEvent) -> None:
