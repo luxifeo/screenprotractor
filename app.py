@@ -82,7 +82,6 @@ class Canvas(QLabel):
         # print(ev.x(), ev.y())
         x = ev.x()
         y = ev.y()
-
         
         if not self.isMovingPoint and not self.isMovingWindow:
             minDist = math.inf
@@ -145,7 +144,7 @@ class Canvas(QLabel):
                 self.isMovingPoint = True
             else:
                 self.isMovingWindow = True
-                self.setCursor(Qt.PointingHandCursor)
+                self.setCursor(Qt.ClosedHandCursor)
                 self.movingWindowAnchorPoint = ev.globalPos()
                 logger.debug(f'Anchor Pos {self.movingWindowAnchorPoint}')
         return super().mousePressEvent(ev)
@@ -262,12 +261,33 @@ class Canvas(QLabel):
         padding = 15
         painter.fillRect(0, 0, padding * 2 + textW, padding * 2 + textH, QColor(255, 255, 255, 255))
         painter.drawText(padding, padding + textH, text)
-        painter.drawText(int(relativePointO.x() + penWidth), int(relativePointO.y() - penWidth), f'O ({self.pointO.x():.0f}, {self.pointO.y():.0f})')
-        painter.drawText(int(relativePointA.x() + penWidth), int(relativePointA.y() - penWidth), f'A ({self.pointA.x():.0f}, {self.pointA.y():.0f})')
-        painter.drawText(int(relativePointB.x() + penWidth), int(relativePointB.y() - penWidth), f'B ({self.pointB.x():.0f}, {self.pointB.y():.0f})')
+
+        self.drawPointPositionText(painter, relativePointO, f'O ({self.pointO.x():.0f}, {self.pointO.y():.0f})', penWidth, penWidth)
+        self.drawPointPositionText(painter, relativePointA, f'A ({self.pointO.x():.0f}, {self.pointO.y():.0f})', penWidth, penWidth)
+        self.drawPointPositionText(painter, relativePointB, f'B ({self.pointB.x():.0f}, {self.pointB.y():.0f})', penWidth, penWidth)
 
         painter.end()
         return super().paintEvent(a0)
+
+    def drawPointPositionText(self, painter: QPainter, point, text, offsetX, offsetY):
+        ### Draw text so that it does not overflow out of view
+        textLength = painter.fontMetrics().width(text)
+        textHeight = painter.fontMetrics().height()
+        pointX = point.x()
+        pointY = point.y()
+        limitX = self.width()
+        limitY = self.height()
+        if offsetX + pointX + textLength > limitX:
+            textX = pointX - offsetX - textLength
+        else:
+            textX = pointX + offsetX
+
+        if pointY - offsetY < textHeight:
+            textY = pointY + offsetY + textHeight
+        else:
+            textY = pointY - offsetY
+
+        painter.drawText(int(textX), int(textY), text)
 
     def keyPressEvent(self, ev: QKeyEvent) -> None:
         if ev.key() == Qt.Key.Key_Q:
